@@ -49,4 +49,19 @@ for country in age_gender_summary_stats.country_destination.unique():
 
 #different distributions of ages!
 
+# group by age and gender
+
+order_of_gender_ages_female = [("female", age) for age in order_of_ages]
+order_of_gender_ages_male = [("male", age) for age in order_of_ages]
+order_of_gender_ages = order_of_gender_ages_female + order_of_gender_ages_male
+
+
+age_gender_summary_stats.groupby(["gender", "age_bucket"]).population_in_thousands.sum()[order_of_gender_ages].plot(kind="bar")
+
+for country in age_gender_summary_stats.country_destination.unique():
+    f1 = plt.figure()
+    f1.add_subplot(age_gender_summary_stats[age_gender_summary_stats.country_destination == country].groupby(["gender", "age_bucket"]).population_in_thousands.sum()[order_of_gender_ages].plot(kind="bar", title = country))
+    plt.show()
+    
+
 
