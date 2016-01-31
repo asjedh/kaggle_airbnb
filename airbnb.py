@@ -156,6 +156,13 @@ users.date_account_created = pd.to_datetime(users.date_account_created)
 users.date_first_booking = pd.to_datetime(users.date_first_booking)
 users.timestamp_first_active = pd.to_datetime(users.timestamp_first_active.apply(lambda x: int(str(x)[0:8])), format = "%Y%m%d")
 
-users.date_account_created - users.timestamp_first_active
-(users.date_account_created - users.timestamp_first_active).value_counts() #most people sign up same day... timestamp first active might not be very useful
+(users.date_account_created - users.timestamp_first_active).value_counts().sort_index() #most people sign up same day... timestamp first active might not be very useful
 
+(users.date_first_booking - users.date_account_created).value_counts()[0:30].sort_index() #most people book soon after making an account
+
+#add month account was created, since I think that might be important...
+users["month_account_created"] = users.date_account_created.apply(lambda x: x.month)
+users.month_account_created.value_counts().sort_index().plot(kind = "bar") #more people create accounts just before summer... not surprising
+
+users["weekday_account_created"] = users.date_account_created.apply(lambda x: x.weekday())
+users.weekday_account_created.value_counts().sort_index().plot(kind = "bar")
