@@ -9,6 +9,8 @@ import pandas as pd
 import seaborn as sns
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.cross_validation import train_test_split
 
 os.chdir("/Users/asjedh/Desktop/kaggle_airbnb")
 
@@ -160,9 +162,166 @@ users.timestamp_first_active = pd.to_datetime(users.timestamp_first_active.apply
 
 (users.date_first_booking - users.date_account_created).value_counts()[0:30].sort_index() #most people book soon after making an account
 
-#add month account was created, since I think that might be important...
+#add month account was created, since I think that might be important due to holidays, weather, etc...
 users["month_account_created"] = users.date_account_created.apply(lambda x: x.month)
 users.month_account_created.value_counts().sort_index().plot(kind = "bar") #more people create accounts just before summer... not surprising
 
 users["weekday_account_created"] = users.date_account_created.apply(lambda x: x.weekday())
 users.weekday_account_created.value_counts().sort_index().plot(kind = "bar")
+
+
+users.info()
+
+sessions = pd.read_csv("data/sessions.csv")
+
+sessions.info()
+sessions.head(40)
+sessions.action.value_counts()
+sessions.action_type.value_counts()
+sessions.action_detail.value_counts()
+sessions.device_type.value_counts()
+
+sessions[sessions.action == "show"].action_type.value_counts()
+sessions[sessions.action == "show"].action_detail.value_counts() #looks like it's related to opening certain views on the website
+
+sessions[sessions.action == "index"].action_type.value_counts()
+sessions[sessions.action == "index"].action_detail.value_counts() #unclear
+
+sessions[sessions.action == "search_results"].action_type.value_counts()
+sessions[sessions.action == "search_results"].action_detail.value_counts() #view search results
+
+sessions[sessions.action == "personalize"].action_type.value_counts()
+sessions[sessions.action == "personalize"].action_detail.value_counts() #wish list!
+
+sessions[sessions.action == "search"].action_type.value_counts()
+sessions[sessions.action == "search"].action_detail.value_counts() # just view search results
+
+sessions[sessions.action == "ajax_refresh_subtotal"].action_detail.value_counts() #change trip characteristics
+
+sessions[sessions.action == "similar_listings"].action_detail.value_counts() #similar listings detail
+
+sessions[sessions.action == "social_connections"].action_detail.value_counts() #user social connections... intersting
+
+sessions[sessions.action == "reviews"].action_detail.value_counts() #someone looking at listing/user reviews?
+
+sessions[sessions.action_detail == "-unknown-"].action.value_counts() #someone looking at listing/user reviews?
+
+sessions.action.value_counts()[sessions.action.value_counts() > 1000]
+sessions.action.value_counts()[sessions.action.value_counts() > 1000].to_csv("test.csv")
+
+'''
+Okay, cool... here's what I'm going to do.
+1) Count up all actions for a user, store as column
+2) For each action > 1000, I'm going to loop through the actions,
+and count up how many each user has
+'''
+
+#count up sessions per user
+actions_per_user = pd.DataFrame(sessions.groupby("user_id").action.count())
+actions_per_user
+
+users.info()
+
+users = users.merge(actions_per_user, left_on = "id", right_index = True, how = "left")
+users.fillna(value = dict(action=0), inplace = True)
+#count up each action > 1000 for each user
+
+
+user_ids_to_merge_with_action_counts = pd.DataFrame({"user_id": sessions.user_id.unique()})
+for action in sessions.action.value_counts()[sessions.action.value_counts() > 1000].index:
+    current_actions_only = sessions[sessions.action == action]
+    
+    action_count = pd.DataFrame({action: current_actions_only.groupby("user_id").action.count()})
+    
+    user_ids_to_merge_with_action_counts = user_ids_to_merge_with_action_counts.merge(action_count, left_on = "user_id", right_index = True, how = "left")
+
+
+user_ids_to_merge_with_action_counts.fillna(0, inplace = True)
+
+users = users.merge(user_ids_to_merge_with_action_counts, left_on = "id", right_on = "user_id", how = "left")
+fill_na_after_merge = pd.DataFrame([0] * 148, index = user_ids_to_merge_with_action_counts.columns).to_dict()[0]
+
+users.fillna(value = fill_na_after_merge, inplace = True)
+fill_na_after_merge
+
+avg_age_by_gender = users.groupby("gender").age.mean()
+avg_age_by_gender
+for gender in users.gender.unique():
+    users.loc[users[(users.gender == gender) & (pd.isnull(users.age))].index, "age"] = avg_age_by_gender[gender]
+
+users.age.value_counts(dropna = False)
+
+pd.DataFrame(users.columns).to_csv("user_columns.csv")
+
+'''
+need to get dummies for:
+gender
+signup_method
+signup_flow
+language
+affiliate_channel
+affiliate_provider
+first_affiliate_tracked
+signup_app
+first_device_type
+first_browser
+'''
+gender_dummies = pd.get_dummies(users.gender, prefix = "gender")
+users = users.merge(gender_dummies, left_index = True, right_index = True)
+
+users.signup_method
+signup_method_dummies = pd.get_dummies(users.signup_method, prefix = "signup_method")
+users = users.merge(signup_method_dummies, left_index = True, right_index = True)
+
+users.signup_flow.value_counts()
+signup_flow_dummies = pd.get_dummies(users.signup_flow, prefix = "signup_flow")
+users = users.merge(signup_flow_dummies, left_index = True, right_index = True)
+
+users.language.value_counts()
+language_dummies = pd.get_dummies(users.language, prefix = "language")
+users = users.merge(language_dummies, left_index = True, right_index = True)
+
+users.affiliate_channel.value_counts()
+affiliate_channel_dummies = pd.get_dummies(users.affiliate_channel, prefix = "affiliate_channel")
+users = users.merge(affiliate_channel_dummies, left_index = True, right_index = True)
+
+users.affiliate_provider.value_counts()
+affiliate_provider_dummies = pd.get_dummies(users.affiliate_provider, prefix = "affiliate_provider")
+users = users.merge(affiliate_provider_dummies, left_index = True, right_index = True)
+
+users.first_affiliate_tracked.value_counts()
+first_affiliate_tracked_dummies = pd.get_dummies(users.first_affiliate_tracked, prefix = "first_affiliate_tracked")
+users = users.merge(first_affiliate_tracked_dummies, left_index = True, right_index = True)
+
+users.signup_app.value_counts()
+signup_app_dummies = pd.get_dummies(users.signup_app, prefix = "signup_app")
+users = users.merge(signup_app_dummies, left_index = True, right_index = True)
+
+users.first_device_type.value_counts()
+first_device_type_dummies = pd.get_dummies(users.first_device_type, prefix = "first_device_type")
+users = users.merge(first_device_type_dummies, left_index = True, right_index = True)
+
+users.first_browser.value_counts()
+first_browser_dummies = pd.get_dummies(users.first_browser, prefix = "first_browser")
+users = users.merge(first_browser_dummies, left_index = True, right_index = True)
+
+pd.DataFrame(users.columns).to_csv("user_columns.csv")
+
+
+#let's build a model!
+
+
+rfc = RandomForestClassifier(random_state = 0, n_estimators = 300, oob_score = True)
+X_cols = pd.read_csv("x_cols_m1.csv", header = None)[0]
+X_cols
+X = users[X_cols]
+y = users.booked
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, random_state = 0)
+rfc.fit(X_train, y_train)
+
+rfc.oob_score_
+
+rfc.score(X_test, y_test)
+
+y_test.sum() * 1.0 / len(y_test)
